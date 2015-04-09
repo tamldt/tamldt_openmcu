@@ -1,4 +1,4 @@
-window.l_welcome = 'OpenMCU-ru';
+window.l_welcome = 'HONEYNET-MCU';
 window.l_status = 'Status';
 
 window.l_connections = 'Connections';
@@ -69,30 +69,14 @@ window.l_support = 'Support';
 
 window.l_info_welcome ='\
 <p>\
-Service OpenMCU-ru is running and accepting connections.\
+HONEYNET-MCU<br>\
+http://honeynet.vn<br>\
+SDT:0938357205<br>\
 </p>\
-<p>\
-Conference started by connection from some terminal will work in unmanaged mode. All members will see the same picture. In unmanaged mode OpenMCU-ru automatically change layout depending on number of conference members, in order  from file "layouts.conf". After connecting 100 members other connecting members will not be visible, but will see others.<br />\
-Audio streams in unmanaged mode are transmitting and receiving from all connected members.<br />\
-</p>\
-<p>\
-To test the server make call to room "echo". Or to room "testroomN", where N is number from 1 to 100.<br />\
-</p>\
-<p>\
-Server management is performed from main menu at the top of the page.<br />\
-Page <b>Status</b> shows current connections and terminal parameters.<br />\
-At page <b>Control</b> rooms can be set to managed mode.<br />\
-At page <b>Settings</b> can be set global server parameters.<br />\
-More info can be found in <b>Help</b> (link leads to official Internet site).<br />\
-</p>\
-<p>Below shows a summary of the server.</p>\
 ';
 window.l_welcome_logo ='\
 <p>\
-<b>Custom logo iamge</b>\
-</p>\
-<p>\
-This image is shown when no input video in mixer. Accepted only BMP, JPEG(maximum 500kB), PNG, GIF.\
+This image is shown when no input video in mixer. Accepted only JPEG, maximum 500kB.\
 </p>\
 ';
 
