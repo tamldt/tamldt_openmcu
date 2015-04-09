@@ -1,0 +1,4 @@
+/etc/default/openmcu-ru
+/etc/openmcu-ru/ffserver.conf
+/etc/openmcu-ru/layouts.conf
+/etc/openmcu-ru/openmcu.ini

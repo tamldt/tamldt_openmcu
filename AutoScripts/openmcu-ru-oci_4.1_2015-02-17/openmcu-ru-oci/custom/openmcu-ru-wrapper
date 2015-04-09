@@ -1,0 +1,5 @@
+#!/bin/bash
+
+DIR_PREFIX="/opt/openmcu-ru"
+export LD_LIBRARY_PATH="$DIR_PREFIX/lib"
+"$DIR_PREFIX/bin/openmcu-ru" "$@"

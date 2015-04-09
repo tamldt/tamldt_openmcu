@@ -1,0 +1,9 @@
+#!/bin/bash
+
+DST_PACKAGE_ARCH="$(rpm --eval %_arch)"
+DST_FILENAME="rpmforge-release-0.5.2-2.el5.rf.$DST_PACKAGE_ARCH.rpm"
+wget http://packages.sw.be/rpmforge-release/$DST_FILENAME
+rpm --import http://apt.sw.be/RPM-GPG-KEY.dag.txt
+rpm -K $DST_FILENAME
+rpm -i $DST_FILENAME
+rm $DST_FILENAME

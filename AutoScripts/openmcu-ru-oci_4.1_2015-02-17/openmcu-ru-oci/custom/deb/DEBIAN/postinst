@@ -1,0 +1,43 @@
+#!/bin/sh
+
+DAEMON_USER="mcu"
+DAEMON_NAME="openmcu-ru"
+DAEMON_HOMEDIR="/var/lib/$DAEMON_NAME"
+DAEMON_LOGDIR="/var/log/$DAEMON_NAME"
+DAEMON_CONFIG="/etc/$DAEMON_NAME"
+
+case "$1" in
+
+  configure)
+    # Creating system user
+    adduser --home $DAEMON_HOMEDIR --no-create-home --quiet --system --group $DAEMON_USER
+
+    # Creating home directory
+    mkdir -p $DAEMON_HOMEDIR
+    chown $DAEMON_USER: $DAEMON_HOMEDIR
+    chmod 0700 $DAEMON_HOMEDIR
+
+    # Creating log directory
+    mkdir -p $DAEMON_LOGDIR
+    chown $DAEMON_USER:adm $DAEMON_LOGDIR
+    chmod 0750 $DAEMON_LOGDIR
+
+    # chown config directory
+    chown -R $DAEMON_USER: $DAEMON_CONFIG
+  ;;
+
+  abort-upgrade|abort-remove|abort-deconfigure)
+
+  ;;
+
+  *)
+    echo "postinst called with unknown argument '$1'" >&2
+    exit 1
+  ;;
+  
+esac
+
+update-rc.d $DAEMON_NAME defaults 95 >/dev/null
+/etc/init.d/$DAEMON_NAME start
+
+exit 0

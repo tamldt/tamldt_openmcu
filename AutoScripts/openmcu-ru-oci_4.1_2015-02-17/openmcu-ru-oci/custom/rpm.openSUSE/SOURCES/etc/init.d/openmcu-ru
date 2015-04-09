@@ -1,0 +1,131 @@
+#!/bin/bash
+#
+# OpenMCU-ru	Start up the OpenMCU-ru server daemon
+#
+# chkconfig: 2345 80 25
+# description: OpenMCU-ru video conference server
+#
+# processname: openmcu
+# config: /etc/openmcu-ru/daemon.conf
+# pidfile: /var/run/openmcu-ru/openmcu-ru.pid
+
+### BEGIN INIT INFO
+# Provides:          openmcu-ru
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: OpenMCU-ru
+# Description:       OpenMCU-ru video conference server
+### END INIT INFO
+
+DAEMON_DESC="OpenMCU-ru video conference server"
+DAEMON_NAME="openmcu-ru"
+DAEMON_DIR="/opt/$DAEMON_NAME"
+DAEMON_EXEC="$DAEMON_DIR/bin/openmcu-ru"
+DAEMON_PIDDIR="/var/run/$DAEMON_NAME"
+DAEMON_PIDFILE="$DAEMON_PIDDIR/$DAEMON_NAME.pid"
+SCRIPTNAME="/etc/init.d/$DAEMON_NAME"
+
+# Exit if the package is not installed
+[ -x "$DAEMON_EXEC" ] || exit 0
+
+# Read configuration variable file if it is present
+DAEMON_ENABLED=true
+DAEMON_USER="mcu"
+DAEMON_COREDUMP="0"
+DAEMON_CONF="$DAEMON_DIR/config"
+if [ -r "$DAEMON_CONF" ] ; then
+  . "$DAEMON_CONF"
+fi
+
+if ! $DAEMON_ENABLED ; then
+  echo "Daemon $DAEMON_NAME disabled ($DAEMON_CONF)" >&2
+  exit 0
+fi
+
+# source function library
+. /etc/rc.status 
+
+#
+# Function that starts the daemon/service
+#
+do_start()
+{
+
+  if [ ! -d "$DAEMON_PIDDIR" ] ; then
+    mkdir "$DAEMON_PIDDIR"
+  fi
+  chown -R "$DAEMON_USER": "$DAEMON_PIDDIR"
+
+  export LD_LIBRARY_PATH="$DAEMON_DIR/lib"
+  ulimit -c $DAEMON_COREDUMP
+  if [ ! -z "$DAEMON_MAXPROCESSES" ] ; then
+    ulimit -u $DAEMON_MAXPROCESSES
+  fi
+  if [ ! -z "$DAEMON_MAXOPENFILES" ] ; then
+    ulimit -n $DAEMON_MAXOPENFILES
+  fi
+
+  if do_status >/dev/null 2>&1 ; then
+    echo "Service $DAEMON_NAME is already running."
+    return 0
+  fi
+  echo -n "Starting $DAEMON_NAME"
+  startproc -f -u $DAEMON_USER $DAEMON_EXEC --daemon --pid-file $DAEMON_PIDFILE
+  rc_status -v
+}
+
+#
+# Function that stops the daemon/service
+#
+do_stop()
+{
+
+  echo -n "Stopping $DAEMON_NAME"
+  killproc -p $DAEMON_PIDFILE -TERM $DAEMON_EXEC
+  rc_status -v
+  sleep 1s
+  rm -f $DAEMON_PIDFILE
+}
+
+#
+# Function that shows status
+#
+do_status()
+{
+  echo -n "Checking for service $DAEMON_NAME "
+  checkproc -p $DAEMON_PIDFILE $DAEMON_EXEC
+  rc_status -v
+}
+
+# First reset status of this service                                                                                                  
+rc_reset 
+
+case "$1" in
+
+  start)
+    do_start
+  ;;
+
+  stop)
+    do_stop
+  ;;
+
+  status)
+    do_status
+  ;;
+
+  restart)
+    do_stop
+    do_start
+  ;;
+
+  *)
+    echo "Usage: $SCRIPTNAME {start|stop|status|restart}" >&2
+    exit 1
+  ;;
+  
+esac
+
+rc_exit

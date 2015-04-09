@@ -1,0 +1,5 @@
+#!/bin/sh
+
+cat << EOF >> /etc/apt/sources.list.d/squeeze-backports.list
+deb http://mirror.yandex.ru/debian-backports/ squeeze-backports main non-free contrib
+deb-src http://mirror.yandex.ru/debian-backports/ squeeze-backports main non-free contrib

@@ -1,0 +1,42 @@
+#!/bin/sh
+
+DAEMON_USER="mcu"
+DAEMON_NAME="openmcu-ru"
+DAEMON_HOMEDIR="/var/lib/$DAEMON_NAME"
+DAEMON_LOGDIR="/var/log/$DAEMON_NAME"
+DAEMON_CONFIG="/etc/$DAEMON_NAME"
+DAEMON_PIDDIR="/var/run/$DAEMON_NAME"
+
+case "$1" in
+
+  purge)
+    # Delete system user
+    deluser --quiet --system $DAEMON_USER
+
+    # Delete home directory
+    rm -r $DAEMON_HOMEDIR >/dev/null 2>&1
+
+    # Delete log directory
+    rm -r $DAEMON_LOGDIR >/dev/null 2>&1
+
+    # Delete config directory
+    rm -r $DAEMON_CONFIG >/dev/null 2>&1
+
+    # Delete pid directory
+    rm -r $DAEMON_PIDDIR >/dev/null 2>&1
+  ;;
+
+  remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+
+  ;;
+
+  *)
+    echo "postrm called with unknown argument '$1'" >&2
+    exit 1
+  ;;
+  
+esac
+
+update-rc.d $DAEMON_NAME remove >/dev/null
+
+exit 0

@@ -1,0 +1,164 @@
+#!/bin/bash
+
+### BEGIN INIT INFO
+# Provides:          openmcu-ru
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: OpenMCU-ru
+# Description:       OpenMCU-ru video conference server
+### END INIT INFO
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+DAEMON_DESC="OpenMCU-ru video conference server"
+DAEMON_NAME="openmcu-ru"
+DAEMON_DIR="/opt/$DAEMON_NAME"
+DAEMON_EXEC="$DAEMON_DIR/bin/openmcu-ru"
+DAEMON_PIDDIR="/var/run/$DAEMON_NAME"
+DAEMON_PIDFILE="$DAEMON_PIDDIR/$DAEMON_NAME.pid"
+SCRIPTNAME="/etc/init.d/$DAEMON_NAME"
+
+# Exit if the package is not installed
+[ -x "$DAEMON_EXEC" ] || exit 0
+
+# Read configuration variable file if it is present
+DAEMON_ENABLED=true
+DAEMON_USER="mcu"
+DAEMON_COREDUMP="0"
+DAEMON_CONF="/etc/default/openmcu-ru"
+if [ -r "$DAEMON_CONF" ] ; then
+  . "$DAEMON_CONF"
+fi
+
+if ! $DAEMON_ENABLED ; then
+  echo "Daemon $DAEMON_NAME disabled ($DAEMON_CONF)" >&2
+  exit 0
+fi
+
+# Define LSB log_* functions.
+# Depend on lsb-base (>= 3.2-14) to ensure that this file is present
+# and status_of_proc is working.
+. /lib/lsb/init-functions
+
+#
+# Function that starts the daemon/service
+#
+do_start()
+{
+
+  if [ ! -d "$DAEMON_PIDDIR" ] ; then
+    mkdir "$DAEMON_PIDDIR"
+  fi
+  chown -R "$DAEMON_USER": "$DAEMON_PIDDIR"
+
+  export LD_LIBRARY_PATH="$DAEMON_DIR/lib"
+  ulimit -c $DAEMON_COREDUMP
+  if [ ! -z "$DAEMON_MAXPROCESSES" ] ; then
+    ulimit -u $DAEMON_MAXPROCESSES
+  fi
+  if [ ! -z "$DAEMON_MAXOPENFILES" ] ; then
+    ulimit -n $DAEMON_MAXOPENFILES
+  fi
+
+  # Return
+  #   0 if daemon has been started
+  #   1 if daemon was already running
+  #   2 if daemon could not be started
+  start-stop-daemon \
+    --start \
+    --quiet \
+    --pidfile $DAEMON_PIDFILE \
+    --exec $DAEMON_EXEC \
+    --test > /dev/null \
+    || return 1
+  start-stop-daemon \
+    --start \
+    --quiet \
+    --background \
+    --chuid $DAEMON_USER \
+    --chdir "$DAEMON_DIR" \
+    --exec $DAEMON_EXEC \
+    -- --daemon --pid-file $DAEMON_PIDFILE \
+    || return 2
+
+  sleep 1s
+  return 0
+}
+
+#
+# Function that stops the daemon/service
+#
+do_stop()
+{
+
+  # Return
+  #   0 if daemon has been stopped
+  #   1 if daemon was already stopped
+  #   2 if daemon could not be stopped
+  #   other if a failure occurred
+  start-stop-daemon \
+    --stop \
+    --quiet \
+    --retry TERM/5/KILL \
+    --user $DAEMON_USER \
+    --pidfile $DAEMON_PIDFILE
+
+  RETVAL="$?"
+  [ "$RETVAL" = 0 ] && sleep 1s
+  rm -f $DAEMON_PIDFILE
+  return "$RETVAL"
+
+}
+
+case "$1" in
+
+  start)
+    log_daemon_msg "Starting $DAEMON_DESC" "$DAEMON_NAME"
+    do_start
+    case "$?" in
+      0|1) log_end_msg 0 ;;
+      2) log_end_msg 1 ;;
+    esac
+  ;;
+
+  stop)
+    log_daemon_msg "Stopping $DAEMON_DESC" "$DAEMON_NAME"
+    do_stop
+    case "$?" in
+      0|1) log_end_msg 0 ;;
+      2) log_end_msg 1 ;;
+    esac
+  ;;
+
+  status)
+    status_of_proc -p $DAEMON_PIDFILE $DAEMON_EXEC $DAEMON_NAME && exit 0 || exit $?
+  ;;
+
+  restart|force-reload)
+    log_daemon_msg "Restarting $DAEMON_DESC" "$DAEMON_NAME"
+    do_stop
+    case "$?" in
+      0|1)
+        do_start
+        case "$?" in
+          0) log_end_msg 0 ;;
+          1) log_end_msg 1 ;; # Old process is still running
+          *) log_end_msg 1 ;; # Failed to start
+        esac
+      ;;
+      *)
+        # Failed to stop
+        log_end_msg 1
+      ;;
+    esac
+  ;;
+
+  *)
+    echo "Usage: $SCRIPTNAME {start|stop|status|restart|force-reload}" >&2
+    exit 3
+  ;;
+  
+esac
+
+:

@@ -1,0 +1,82 @@
+#######################################################
+# Language support file script openmcu-oci            #
+# Language: English (EN)                              #
+# Author: vol4enok (mailto: vb911@mail.ru )           #
+# License: GPL v.2                                    #
+# The current version located here:                   #
+#   http://openmcu.ru/public/OpenMCU-ru/build_script/ #
+#######################################################
+
+LNG_COMMAND="Command"
+LNG_CMD_SUCCESS="completed successfully"
+LNG_CMD_ERROR="failed"
+LNG_CMD_ERROR_MESSAGE="Fix errors and try again."
+LNG_SOURCE_FOLDER="Source directory"
+LNG_BUILD_FOLDER="Build directory"
+LNG_INSTALL_FOLDER="Installation directory"
+LNG_LIB_PREFIX="Library build prefix"
+LNG_MSG_NOT_DOWN="Source will not be downloaded"
+LNG_CONTINUE="Continue"
+LNG_CONTINUE_YES_NO_RM="Continue or remove source and download again"
+LNG_REMOVE_CFG_YES_NO="Remove configure files?"
+LNG_EXISTS="already exists"
+LNG_PKG_NOT_INSTALL="Necessary packages are not installed"
+LNG_DOWN_SUCCESS="Components was downloaded successfully"
+LNG_ERROR_DEF_VER="Error on determining version"
+LNG_BUILD_VER="Building version"
+LNG_MSG_BUILD="It will be cleaned and build again"
+LNG_MSG_SUCCESS="Compilation and installation successfully finished"
+LNG_MSG_RUN_MCU="To run OpenMCU-ru change directory to"
+LNG_MSG_EXEC="and run by command"
+LNG_MSG_BUILD_DEB="Build a deb-package"
+LNG_MSG_BUILD_RPM="Build a rpm-package"
+LNG_MSG_BUILD_PKG="Built package"
+LNG_MSG_BUILD_ERROR="Package was not build"
+LNG_MSG_UNINST="During uninstall will be removed all files, including configs"
+LNG_MSG_UNINST_SUCCESS="Uninstallation completed"
+LNG_MSG_ROOT_NEED="You must be root to run this script"
+LNG_MSG_CFG_NOT_FOUND="Configuration file not found"
+LNG_MSG_DISTR_NOT_SUPPORT="This Linux distributive is not supported"
+LNG_MSG_DIST_DETERM="Determined distributive"
+LNG_TOTAL_TIME="Total execution time"
+LNG_SHOWHELP="`cat <<EOF
+*******************************************************************************
+*           OpenMCU-ru one cick installation script (openmcu-oci)             *
+*******************************************************************************
+This script automatically builds OpenMCU-ru (http://openmcu.ru).
+It downloads sources of OpenMCU-ru, all necessary components and builds it all.
+Capability to uninstall.
+
+Building and installation of all components (server and libraries)
+by default with prefix "/opt/openmcu-ru".
+
+You must be root to run this script.
+To download the sources (commands "install" and "download") Internet connections
+is necessary.
+Some build settings can be changed in the file "openmcu-oci.ini".
+
+Script usage:
+./openmcu-oci {install|download|build|package|uninstall} {git branch} {configure option 1} ... {configure option n}
+
+install   - make all steps to build and install.
+            (install = download + build + package)
+download  - Only download the sources.
+            The sources are downloaded to the directory "./src",
+            the contents of this folder will not be changed later.
+            It is possible to download the sources once, and then execute "build" command,
+            changing the build options or applying various patches to the sources.
+build     - build and install the specified version.
+            For the build process script create a copy of the directory "./src"
+            named "./build".
+package   - build a DEB/RPM package.
+            Building the package is not required to run OpenMCU-ru.
+            Even if the package did not build - you can still run
+            built version. Build the package is an optional step.
+            Built package can be installed on another machine with the same
+            distribution of Linux.
+uninstall - Remove installed version.
+
+After build and install, you can run OpenMCU-ru (from "$prefix/bin"):
+the command "openmcu-ru(-wrapper) -x" to run in console mode
+the command "openmcu-ru(-wrapper) -d" to run in daemon mode
+EOF`"

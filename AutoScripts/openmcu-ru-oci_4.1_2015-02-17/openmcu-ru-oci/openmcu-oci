@@ -1,0 +1,1152 @@
+#!/bin/bash
+
+# Скрипт для сборки OpenMCU-ru v.3.49 master (http://openmcu.ru/)
+# Версия: 2014-06-05 beta
+# Автор: vol4enok (mailto: vb911@mail.ru )
+#        rayanAyar (mailto: rayanayar@mail.ru)
+# Лицензия: GPL v.2
+# Актуальную версию искать здесь:
+#   http://openmcu.ru/public/OpenMCU-ru/build_script/
+
+
+# ================ функции ================
+
+# ---------------- do_showhelp ----------------
+
+do_showhelp ()
+{
+echo "$LNG_SHOWHELP"
+}
+
+# ---------------- date_formatted ----------------
+date_formatted ()
+{
+echo "$(date +%Y-%m-%d+%H-%M-%S)"
+}
+
+do_step ()
+{
+
+STEP_COMMAND="$1"
+
+echo ""
+echo "$(date_formatted) $LNG_COMMAND: $STEP_COMMAND"
+echo "----------------------------------------------------------------"
+if $SILENT_MODE ; then
+  bash -c "$STEP_COMMAND" > /dev/null 2>&1
+else
+  bash -c "$STEP_COMMAND"
+fi 
+EXIT_CODE=$?
+echo "----------------------------------------------------------------"
+echo "$(date_formatted) $LNG_COMMAND: $STEP_COMMAND"
+if [ $EXIT_CODE = 0 ] ; then
+  echo "$LNG_CMD_SUCCESS."
+else
+  echo "$LNG_CMD_ERROR."
+  echo "EXIT CODE: $EXIT_CODE"
+  echo "$LNG_CMD_ERROR_MESSAGE."
+  exit 1
+fi
+
+}
+
+# ---------------- do_download ----------------
+do_download ()
+{
+
+# создание директории для исходников
+if [ -e "$DIR_SRC" ] ; then
+  echo 
+  echo "$LNG_SOURCE_FOLDER ($DIR_SRC) $LNG_EXISTS."
+  echo "$LNG_MSG_NOT_DOWN."
+  read -p "$LNG_CONTINUE_YES_NO_RM? (Y/n/r): "
+  if [ "$REPLY" = "n" ] || [ "$REPLY" = "N" ] ; then
+    exit 1
+  fi
+  if [ "$REPLY" = "r" ] || [ "$REPLY" = "R" ] ; then
+    do_step "rm -rf $DIR_SRC"
+  else
+    return 0
+  fi
+fi
+do_step "mkdir $DIR_SRC"
+cd "$DIR_SRC"
+
+# необходимые утилиты
+if ! packages_installed "$PACKAGES_DOWNLOAD" ; then
+  do_step "$PACKAGE_MANAGER $PACKAGES_DOWNLOAD"
+
+  # yum всегда возвращает успешный код вовзрата, даже если пакеты не установлены (wtf?)
+  # проверяем ещё раз
+  if ! packages_installed "$PACKAGES_DOWNLOAD" ; then
+    echo "$LNG_PKG_NOT_INSTALL."
+    exit 1
+  fi
+fi
+
+# yasm
+if $BUILD_YASM ; then
+  do_step "wget http://www.tortall.net/projects/yasm/releases/yasm-1.2.0.tar.gz"
+  do_step "tar xvfz ./yasm-1.2.0.tar.gz"
+  do_step "mv ./yasm-1.2.0 ./yasm"
+  do_step "rm ./yasm-1.2.0.tar.gz"
+fi
+
+# sofia-sip
+if $BUILD_SOFIA ; then
+  do_step "wget http://downloads.sourceforge.net/project/sofia-sip/sofia-sip/1.12.11/sofia-sip-1.12.11.tar.gz"
+  do_step "tar xvfz ./sofia-sip-1.12.11.tar.gz"
+  do_step "mv ./sofia-sip-1.12.11 ./sofia-sip"
+  do_step "rm ./sofia-sip-1.12.11.tar.gz"
+fi
+
+# libopus
+if $BUILD_OPUS ; then
+  do_step "wget http://downloads.xiph.org/releases/opus/opus-1.1.tar.gz"
+  do_step "tar xvfz ./opus-1.1.tar.gz"
+  do_step "mv ./opus-1.1 ./libopus"
+  do_step "rm ./opus-1.1.tar.gz"
+fi
+
+# libvpx
+if $BUILD_VPX ; then
+  do_step "wget http://webm.googlecode.com/files/libvpx-v1.1.0.tar.bz2"
+  do_step "tar xvfj ./libvpx-v1.1.0.tar.bz2"
+  do_step "mv ./libvpx-v1.1.0 ./libvpx"
+  do_step "rm ./libvpx-v1.1.0.tar.bz2"
+#   git clone http://git.chromium.org/webm/libvpx.git ./libvpx
+fi
+
+# x264
+if $BUILD_X264 ; then
+  do_step "git clone git://git.videolan.org/x264.git ./x264"
+fi
+
+# ffmpeg
+if $BUILD_FFMPEG ; then
+  do_step "wget http://ffmpeg.org/releases/ffmpeg-0.10.4.tar.gz"
+  do_step "tar xvfz ./ffmpeg-0.10.4.tar.gz"
+  do_step "mv ./ffmpeg-0.10.4 ./ffmpeg"
+  do_step "rm ./ffmpeg-0.10.4.tar.gz"
+fi
+
+# libyuv
+if $BUILD_LIBYUV ; then
+  do_step "svn --revision 634 checkout http://libyuv.googlecode.com/svn/trunk/ ./libyuv"
+fi
+
+# openmcu-ru
+do_step "git clone git://github.com/tadung/honeynetmcu.git ./honeynet-mcu"
+do_step "cd ./honeynet-mcu && git branch -r"
+
+# завершение
+echo ""
+echo "$LNG_DOWN_SUCCESS."
+sleep 1s
+
+}
+
+# ---------------- do_build ----------------
+do_build ()
+{
+
+# создание директории сборки
+if [ -e "$DIR_BUILD" ] ; then
+  echo 
+  echo "$LNG_BUILD_FOLDER ($DIR_BUILD) $LNG_EXISTS."
+  echo "$LNG_MSG_BUILD."
+  read -p "$LNG_CONTINUE? (Y/n): "
+  if [ "$REPLY" = "n" ] || [ "$REPLY" = "N" ] ; then
+    exit 1
+  fi
+  do_step "rm -rf $DIR_BUILD"
+fi
+
+# необходимые зависимости для сборки
+if ! packages_installed "$PACKAGES_BUILD" ; then
+  do_step "$PACKAGE_MANAGER $PACKAGES_BUILD"
+  
+  # yum всегда возвращает успешный код вовзрата, даже если пакеты не установлены (wtf?)
+  # проверяем ещё раз
+  if ! packages_installed "$PACKAGES_BUILD" ; then
+    echo "$LNG_PKG_NOT_INSTALL."
+    exit 1
+  fi
+fi
+
+# мета-пакеты - вместо них будут установлены пакеты с другими именами
+# поэтому ставим без проверки
+# в данный момент используется только при сборке Arch
+if ! [ -z "$PACKAGES_BUILD_META" ] ; then
+  do_step "$PACKAGE_MANAGER $PACKAGES_BUILD_META"
+fi
+
+do_step "cp -a $DIR_SRC $DIR_BUILD"
+cd "$DIR_BUILD"
+
+# переключение на необходимую ветку
+do_step "cd $DIR_BUILD/openmcu-ru && git checkout $OPENMCURU_BRANCH"
+
+# версия
+DST_VERSION="$(grep 'MAJOR_VERSION' $DIR_BUILD/openmcu-ru/openmcu-ru/version.h | awk -F ' ' '{ print $3 }')"
+DST_VERSION="$DST_VERSION.$(grep 'MINOR_VERSION' $DIR_BUILD/openmcu-ru/openmcu-ru/version.h | awk -F ' ' '{ print $3 }')"
+DST_VERSION="$DST_VERSION.$(grep 'BUILD_NUMBER' $DIR_BUILD/openmcu-ru/openmcu-ru/version.h | awk -F ' ' '{ print $3 }')"
+DST_RELEASE="$(cd "$DIR_BUILD/openmcu-ru/" && git rev-list HEAD | wc -l)"
+if [ -z "$DST_VERSION" ] ; then
+  echo "$LNG_ERROR_DEF_VER"
+  exit 1
+fi
+
+if [[ $MCU_CONF_OPTS == *"--enable-debug"* ]]; then
+  DST_RELEASE="${DST_RELEASE}debug";
+fi
+
+do_step "echo $DST_VERSION > $DIR_BUILD/version"
+do_step "echo $DST_RELEASE > $DIR_BUILD/release"
+
+echo 
+echo "$LNG_BUILD_VER: $DST_VERSION-$DST_RELEASE"
+sleep 1s
+
+# применение патчей
+# сделать патч:
+# user@host:~/openmcu-oci$ diff -ur ./src.orig ./src > 99_patch_name.diff
+for N in $(ls $SELF_DIR/custom/*.diff 2>/dev/null) ; do
+  do_step "patch -p2 < $N"
+done
+
+# yasm
+if $BUILD_YASM ; then
+  do_step "cd $DIR_BUILD/yasm/ && ./configure --prefix=$DIR_PREFIX_PLUG && make clean && make $MAKE_OPTS && make install"
+  export PATH=$DIR_PREFIX_PLUG/bin:$PATH
+fi
+
+# sofia-sip
+if $BUILD_SOFIA ; then
+  do_step "cd $DIR_BUILD/sofia-sip/ && ./configure --prefix=$DIR_PREFIX_PLUG $GCC48FLAGS && make clean && make $MAKE_OPTS && make install"
+fi
+
+# libopus
+if $BUILD_OPUS ; then
+  do_step "cd $DIR_BUILD/libopus/ && ./configure --prefix=$DIR_PREFIX_PLUG --enable-shared && make clean && make $MAKE_OPTS && make install"
+fi
+
+# libvpx
+if $BUILD_VPX ; then
+  do_step "cd $DIR_BUILD/libvpx/ && ./configure --prefix=$DIR_PREFIX_PLUG --enable-shared && make clean && make $MAKE_OPTS && make install"
+fi
+
+# x264
+if $BUILD_X264 ; then
+  do_step "cd $DIR_BUILD/x264/ && ./configure --prefix=$DIR_PREFIX_PLUG --enable-shared && make clean && make $MAKE_OPTS && make install"
+fi
+
+# ffmpeg
+if $BUILD_FFMPEG ; then
+  do_step "cd $DIR_BUILD/ffmpeg/ && ./configure --prefix=$DIR_PREFIX_PLUG --extra-cflags=-I$DIR_PREFIX_PLUG/include/ --extra-ldflags=-L$DIR_PREFIX_PLUG/lib/ --enable-libx264 --enable-libvpx --enable-gpl --disable-static --enable-shared && make clean && make $MAKE_OPTS && make install"
+fi
+
+# libyuv
+if $BUILD_LIBYUV ; then
+  cd "$DIR_BUILD/libyuv"
+  do_step 'for SRCFILE in ./source/*.cc; do SRCFILEBASE=$(basename $SRCFILE .cc) ; echo $SRCFILE ; gcc -fPIC -c -fno-stack-protector -Iinclude $SRCFILE -o source/$SRCFILEBASE.o ; done && gcc -shared -Wl,-soname,libyuv.so -o libyuv.so source/*.o -lstdc++'
+  do_step "cd $DIR_BUILD/libyuv && mkdir -p $DIR_PREFIX_PLUG/lib/ && cp libyuv.so $DIR_PREFIX_PLUG/lib/ && chmod 444 $DIR_PREFIX_PLUG/lib/libyuv.so"
+  # do_step "strip --strip-unneeded $DIR_PREFIX/lib/libyuv.so"
+  do_step "cd $DIR_BUILD/libyuv && mkdir -p $DIR_PREFIX_PLUG/include/ && cp include/libyuv.h $DIR_PREFIX_PLUG/include/ && mkdir -p $DIR_PREFIX_PLUG/include/libyuv && cp include/libyuv/*.h $DIR_PREFIX_PLUG/include/libyuv/"
+  cd "$DIR_BUILD"
+fi
+
+# openmcu-ru/configure
+do_step "cd $DIR_BUILD/openmcu-ru && export LD_LIBRARY_PATH=$DIR_PREFIX/lib && ./autogen.sh && ./configure --prefix=$MCU_CONF_PREFIX CPPFLAGS=-I$DIR_PREFIX/include LDFLAGS=-L$DIR_PREFIX/lib $MCU_CONF_OPTS"
+
+# openmcu-ru/postconfigure
+
+# Добавление информации о последнем коммите
+LAST_COMMIT=$(cd "$DIR_BUILD/openmcu-ru/openmcu-ru" && git log --pretty=oneline -n1 | awk -F ' ' '{ print $1 }')
+do_step "sed -i -e '3 s/^/#define GIT_REVISION $LAST_COMMIT\n/;' $DIR_BUILD/openmcu-ru/openmcu-ru/config.h"
+
+# пути
+if [ "$LSB_DISTR" = "Ubuntu" ] || [ "$LSB_DISTR" = "Debian" ] ; then
+  do_step "sed -i 's@^#define SYS_CONFIG_DIR.*@#define SYS_CONFIG_DIR \"/etc/openmcu-ru\"@' $DIR_BUILD/openmcu-ru/openmcu-ru/config.h"
+  do_step "sed -i 's@^#define SYS_PIPE_DIR.*@#define SYS_PIPE_DIR \"/var/run/openmcu-ru\"@' $DIR_BUILD/openmcu-ru/openmcu-ru/config.h"
+  do_step "sed -i 's@^#define SERVER_LOGS.*@#define SERVER_LOGS \"/var/log/openmcu-ru\"@' $DIR_BUILD/openmcu-ru/openmcu-ru/config.h"
+  do_step "sed -i 's@^#define RECORDS_DIR.*@#define RECORDS_DIR \"/var/lib/openmcu-ru\"@' $DIR_BUILD/openmcu-ru/openmcu-ru/config.h"
+fi
+
+# openmcu-ru/make and install
+do_step "cd $DIR_BUILD/openmcu-ru/ && export OPTCCFLAGS=-I$DIR_PREFIX/include && export LDFLAGS=-L$DIR_PREFIX_PLUG/lib && export LD_LIBRARY_PATH=$DIR_PREFIX_PLUG/lib && make clean && make $MAKE_OPTS && make install"
+
+# директории
+if [ "$LSB_DISTR" = "Ubuntu" ] || [ "$LSB_DISTR" = "Debian" ] ; then
+  if [ ! -e "/etc/openmcu-ru" ] ; then
+    do_step "mkdir /etc/openmcu-ru"
+    do_step "mv $DIR_PREFIX/config/* /etc/openmcu-ru/"
+  fi
+  do_step "rm -r $DIR_PREFIX/config"
+
+  if [ ! -e "/var/run/openmcu-ru" ] ; then
+    do_step "mkdir /var/run/openmcu-ru"
+    do_step "mkdir /var/run/openmcu-ru/pipe"
+  fi
+  do_step "rmdir $DIR_PREFIX/pipe"
+
+  if [ ! -e "/var/log/openmcu-ru" ] ; then
+    do_step "mkdir /var/log/openmcu-ru"
+  fi
+  do_step "rmdir $DIR_PREFIX/log"
+
+  if [ ! -e "/var/lib/openmcu-ru" ] ; then
+    do_step "mkdir /var/lib/openmcu-ru"
+  fi
+  do_step "rmdir $DIR_PREFIX/records"
+fi
+
+# strip
+#do_step "find $DIR_PREFIX/lib/ptlib-ru/ -iname '*.so' -type f -exec strip --strip-unneeded '{}' \;"
+#do_step "strip --strip-unneeded $DIR_PREFIX/bin/openmcu-ru"
+
+# определение необходимости wrapper-а
+if ldd "$DIR_PREFIX/bin/openmcu-ru" | grep -q "not found" ; then
+  do_step "cp $SELF_DIR/custom/openmcu-ru-wrapper $DIR_PREFIX/bin/openmcu-ru-wrapper"
+  do_step "sed -i 's#^DIR_PREFIX=.*#DIR_PREFIX=\"$DIR_PREFIX\"#' $DIR_PREFIX/bin/openmcu-ru-wrapper"
+fi
+
+# Установка ECG кодеков
+if $BUILD_ECG ; then
+  # ECG729A
+  do_step "cd $DIR_BUILD/openmcu-ru/libs/h323plus/plugins/audio/ECG729A && make clean && make prefix=$DIR_PREFIX && make install"
+  # ECG728
+  do_step "cd $DIR_BUILD/openmcu-ru/libs/h323plus/plugins/audio/ECG728 && make clean && make prefix=$DIR_PREFIX && make install"
+fi
+
+# удаление yasm - он нужен только в процессе сборки
+if $BUILD_YASM ; then
+  do_step "cd $DIR_BUILD/yasm/ && make uninstall"
+fi
+
+# ldconfig
+do_step "ldconfig"
+
+# завершение
+echo ""
+echo "$LNG_MSG_SUCCESS."
+echo "$LNG_MSG_RUN_MCU $LNG_MSG_EXEC:"
+echo "$DIR_PREFIX/bin/openmcu-ru(-wrapper) -x"
+sleep 1s
+
+}
+
+# ---------------- do_package ----------------
+do_package ()
+{
+
+
+if [ ! "$DIR_PREFIX" = "/opt/openmcu-ru" ] ; then
+  echo "DIR_PREFIX: $DIR_PREFIX"
+  echo "exit"
+  return 0
+fi
+
+if [ "$LSB_DISTR" = "Ubuntu" ] || [ "$LSB_DISTR" = "Debian" ] ; then
+
+  echo
+  echo "$LNG_MSG_BUILD_DEB..."
+  DST_VERSION="$(cat $DIR_BUILD/version 2>/dev/null)"
+  DST_RELEASE="$(cat $DIR_BUILD/release 2>/dev/null)"
+  DST_PACKAGE_NAME="openmcu-ru_${DST_VERSION}-${DST_RELEASE}~${LSB_CODENAME}_${PACKAGE_ARCH}"
+  DST_PACKAGE_FILENAME="$SELF_DIR/${DST_PACKAGE_NAME}.deb"
+
+  # очистка
+  if [ -e "$DIR_BUILD/deb" ] ; then
+    rm -rf "$DIR_BUILD/deb" >/dev/null 2>&1
+  fi
+
+  # копирование скелета
+  cp -a $SELF_DIR/custom/deb $DIR_BUILD >/dev/null 2>&1
+
+  # копирование файлов
+  mkdir -p $DIR_BUILD/deb/opt/ >/dev/null 2>&1
+  cp -a $DIR_PREFIX $DIR_BUILD/deb/opt/ >/dev/null 2>&1
+  cp -a /etc/openmcu-ru/* $DIR_BUILD/deb/etc/openmcu-ru/ >/dev/null 2>&1
+
+  # очистка
+  rm -rf $DIR_BUILD/deb/opt/openmcu-ru/include >/dev/null 2>&1
+
+  # Версия
+  sed -i "s/^Version:.*/Version: $DST_VERSION-$DST_RELEASE/" $DIR_BUILD/deb/DEBIAN/control >/dev/null 2>&1
+
+  # Архитектура
+  sed -i "s/^Architecture:.*/Architecture: $PACKAGE_ARCH/" $DIR_BUILD/deb/DEBIAN/control >/dev/null 2>&1
+
+  # Ментейнер
+  sed -i "s/^Maintainer:.*/Maintainer: $PACKAGE_MAINTAINER/" $DIR_BUILD/deb/DEBIAN/control >/dev/null 2>&1
+
+  # Размер
+  DST_PACKAGE_SIZE=$(du -sk $DIR_BUILD/deb 2>/dev/null | cut -f 1 2>/dev/null)
+  sed -i "s/^Installed-Size:.*/Installed-Size: $DST_PACKAGE_SIZE/" $DIR_BUILD/deb/DEBIAN/control >/dev/null 2>&1
+
+  # Зависимости
+  sed -i "s/^Depends:.*/Depends: $PACKAGES_DEPENDS/" $DIR_BUILD/deb/DEBIAN/control >/dev/null 2>&1
+
+  # Сборка
+  if [ -e "$DST_PACKAGE_FILENAME" ] ; then
+    rm -f "$DST_PACKAGE_FILENAME" >/dev/null 2>&1
+  fi
+
+  cd $DIR_BUILD/deb >/dev/null 2>&1
+  md5deep -r -l opt 2>/dev/null | sort --key=2 > DEBIAN/md5sums 2>/dev/null
+  dpkg-deb --build $DIR_BUILD/deb $DST_PACKAGE_FILENAME >/dev/null 2>&1
+
+elif [ "$LSB_DISTR" = "CentOS" ] || [ "$LSB_DISTR" = "Fedora" ] || [ "$LSB_DISTR" = "openSUSE" ] ; then
+
+  echo
+  echo "$LNG_MSG_BUILD_RPM..."
+
+  DST_VERSION=$(cat $DIR_BUILD/version 2>/dev/null)
+  DST_RELEASE=$(cat $DIR_BUILD/release 2>/dev/null)
+  DST_PACKAGE_NAME="openmcu-ru-$DST_VERSION-$DST_RELEASE.$LSB_CODENAME.$PACKAGE_ARCH"
+  DST_PACKAGE_FILENAME="$SELF_DIR/${DST_PACKAGE_NAME}.rpm"
+
+  # очистка
+  if [ -e "$DIR_BUILD/rpm" ] ; then
+    rm -rf "$DIR_BUILD/rpm" >/dev/null 2>&1
+  fi
+
+  # копирование скелета
+  cp -a $SELF_DIR/custom/rpm.$LSB_DISTR $DIR_BUILD/rpm >/dev/null 2>&1
+  mkdir $DIR_BUILD/rpm/BUILDROOT/$DST_PACKAGE_NAME >/dev/null 2>&1
+
+  # копирование файлов
+  mkdir -p $DIR_BUILD/rpm/BUILDROOT/$DST_PACKAGE_NAME/opt >/dev/null 2>&1
+  cp -a $DIR_PREFIX $DIR_BUILD/rpm/BUILDROOT/$DST_PACKAGE_NAME/opt/
+  cp -a $DIR_BUILD/rpm/SOURCES/* $DIR_BUILD/rpm/BUILDROOT/$DST_PACKAGE_NAME >/dev/null 2>&1
+
+  # очистка
+  rm -rf $DIR_BUILD/rpm/BUILDROOT/$DST_PACKAGE_NAME/opt/include >/dev/null 2>&1
+
+  # Версия
+  sed -i "s/^%define version.*/%define version\t\t$DST_VERSION/" $DIR_BUILD/rpm/SPECS/openmcu-ru.spec >/dev/null 2>&1
+
+  # Релиз
+  sed -i "s/^%define release.*/%define release\t\t$DST_RELEASE.$LSB_CODENAME/" $DIR_BUILD/rpm/SPECS/openmcu-ru.spec >/dev/null 2>&1
+
+  # Архитектура
+  sed -i "s/^%define arch.*/%define arch\t\t$PACKAGE_ARCH/" $DIR_BUILD/rpm/SPECS/openmcu-ru.spec >/dev/null 2>&1
+
+  # Ментейнер
+  sed -i "s/^Packager:.*/Packager:\t$PACKAGE_MAINTAINER/" $DIR_BUILD/rpm/SPECS/openmcu-ru.spec >/dev/null 2>&1
+
+  # Зависимости
+  sed -i "s/^Requires:.*/Requires:\t$PACKAGES_DEPENDS/" $DIR_BUILD/rpm/SPECS/openmcu-ru.spec >/dev/null 2>&1
+
+  # Сборка
+  if [ -e "$DST_PACKAGE_NAME" ] ; then
+    rm -f "$DST_PACKAGE_NAME" >/dev/null 2>&1
+  fi
+
+  cd $DIR_BUILD/rpm >/dev/null 2>&1
+  rpmbuild -vv -bb --define="%__spec_install_pre %{___build_pre}" --define="%_topdir $DIR_BUILD/rpm" SPECS/openmcu-ru.spec >/dev/null 2>&1
+  mv $DIR_BUILD/rpm/RPMS/$PACKAGE_ARCH/${DST_PACKAGE_NAME}.rpm $DST_PACKAGE_FILENAME >/dev/null 2>&1
+fi
+
+# завершение
+if [ -e "$DST_PACKAGE_FILENAME" ] ; then
+  echo "$LNG_MSG_BUILD_PKG: $DST_PACKAGE_NAME"
+else
+  echo "$LNG_MSG_BUILD_ERROR"
+fi
+sleep 1s
+
+}
+
+# ---------------- do_uninstall ----------------
+do_uninstall ()
+{
+
+echo 
+echo "$LNG_MSG_UNINST."
+read -p "$LNG_CONTINUE? (Y/n): "
+if [ "$REPLY" = "n" ] || [ "$REPLY" = "N" ] ; then
+  exit 1
+fi
+
+# openmcu-ru
+cd $DIR_BUILD/openmcu-ru/ && make uninstall
+rm -f $DIR_PREFIX/bin/openmcu-ru-wrapper
+
+  read -p "$LNG_REMOVE_CFG_YES_NO (y/N): "
+  if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ] ; then
+    rm -rf /etc/openmcu-ru
+  fi
+
+rm -rf /var/run/openmcu-ru
+rm -rf /var/log/openmcu-ru
+rm -rf /var/lib/openmcu-ru
+
+# libyuv
+if $BUILD_LIBYUV ; then
+  rm -f $DIR_PREFIX/lib/libyuv.so && rm -rf $DIR_PREFIX/include/libyuv/ && rm -f $DIR_PREFIX/include/libyuv.h
+fi
+
+# ffmpeg
+if $BUILD_FFMPEG ; then
+  cd $DIR_BUILD/ffmpeg/ && make uninstall
+fi
+
+# x264
+if $BUILD_X264 ; then
+  cd $DIR_BUILD/x264/ && make uninstall
+fi
+
+# libopus
+if $BUILD_OPUS ; then
+  cd $DIR_BUILD/libopus/ && make uninstall
+fi
+
+# libvpx
+if $BUILD_VPX ; then
+  cd $DIR_BUILD/libvpx/ && make uninstall
+fi
+
+# sofia-sip
+if $BUILD_SOFIA ; then
+  cd $DIR_BUILD/sofia-sip/ && make uninstall
+fi
+
+# yasm
+if $BUILD_YASM ; then
+  cd $DIR_BUILD/yasm/ && make uninstall
+fi
+
+# директория сборки
+rm -rf $DIR_BUILD
+
+rm -rf $DIR_PREFIX
+# ldconfig
+ldconfig
+
+# завершение
+echo ""
+echo "$LNG_MSG_UNINST_SUCCESS."
+sleep 1s
+
+}
+
+# ---------------- packages_installed ----------------
+packages_installed ()
+{
+
+PACKAGES_LIST="$1"
+
+for ITEM in $PACKAGES_LIST ; do
+  PACKAGE_NAME=$(echo $ITEM | cut -d"/" -f 1)
+  if ! $PACKAGE_CHECK $PACKAGE_NAME >/dev/null 2>&1 ; then
+    return 1
+  fi
+done
+
+return 0
+
+}
+
+# ================ точка входа ================
+SELF_FULLNAME=$(readlink -f "$0")
+SELF_NAME=$(basename "$SELF_FULLNAME")
+SELF_DIR=$(dirname "$SELF_FULLNAME")
+cd "$SELF_DIR"
+
+# ================ Локализация ==================
+# Применяем локализацию
+LNG=$(echo $LANG | awk -F '_' '{ print $1 }')
+if [ ! -e "$SELF_DIR/custom/locales/$LNG.lng" ]; then
+  echo
+  echo "Your localization is not supported! It defaults to English."
+  LNG="en"
+  sleep 1s
+fi
+. "$SELF_DIR/custom/locales/$LNG.lng"
+
+# ============================================
+if ! [ "$(whoami)" = "root" ] ; then
+  echo "$LNG_MSG_ROOT_NEED"
+  exit 1
+fi
+
+# ini-файл
+SCRIPT_DEFAULTS="$SELF_DIR/$SELF_NAME.ini"
+if [ ! -r "$SCRIPT_DEFAULTS" ] ; then
+  echo "$LNG_MSG_CFG_NOT_FOUND: $SCRIPT_DEFAULTS"
+  exit 1
+fi
+. "$SCRIPT_DEFAULTS"
+
+MCU_CONF_PREFIX=$DIR_PREFIX
+DIR_PREFIX="$DIR_PREFIX/openmcu-ru"
+DIR_PREFIX_PLUG=$DIR_PREFIX
+#BUILD_WITCH_VPX="true"
+
+argnum=0
+for arg in "$@"
+do
+  ((argnum+=1))
+  if [ $argnum == 2 ]; then
+    OPENMCURU_BRANCH=$2
+  elif [ $argnum -ge 2 ]; then
+    MCU_CONF_OPTS="${MCU_CONF_OPTS} $arg"
+  fi
+done
+
+# определение дистрибутива
+if [ -z "$LSB_DISTR" ] || [ -z "$LSB_CODENAME" ] ; then
+  if [ -e "/etc/redhat-release" ] ; then
+    LSB_DISTR="$(cat /etc/redhat-release | cut -d' ' -f 1)"
+    LSB_CODENAME="$(cat /etc/redhat-release | cut -d' ' -f 3)"
+    if [ ! -z $(rpm --eval %{?dist} | grep el7) ] ; then
+      LSB_CODENAME="7"
+    fi
+  elif [ -e "/etc/SuSE-release" ] ; then
+    LSB_DISTR="$(cat /etc/SuSE-release | head -n 1 | cut -d' ' -f 1)"
+    LSB_CODENAME="$(cat /etc/SuSE-release | grep 'CODENAME' |  awk -F ' = ' '{ print $2 }')"
+  elif type -p lsb_release >/dev/null ; then
+    LSB_DISTR="$(lsb_release -s -i)"
+    LSB_CODENAME="$(lsb_release -s -c)"
+  fi
+fi
+
+LNG_MSG_DISTR_NOT_SUPPORT="$LNG_MSG_DISTR_NOT_SUPPORT
+LSB_DISTR: $LSB_DISTR
+LSB_CODENAME: $LSB_CODENAME"
+
+# выбор необходимых пакетов, в зависимости от дистрибутива
+case "$LSB_DISTR" in
+
+  Ubuntu)
+    PACKAGE_ARCH="$(dpkg --print-architecture)"
+    PACKAGE_MANAGER="apt-get -V install"
+    PACKAGE_CHECK="dpkg-query --listfiles"
+    PACKAGES_DOWNLOAD="tar bzip2 wget git subversion "
+    
+    PACKAGES_BUILD="build-essential git flex bison autoconf automake pkg-config md5deep libtool libssl-dev"
+    PACKAGES_DEPENDS="libstdc++6"
+    PACKAGES_BUILD_MISC=" libfreetype6-dev libavformat-dev"
+    PACKAGES_DEPENDS_MISC=", libfreetype6"
+    
+    case "$LSB_CODENAME" in 
+      lucid)
+        BUILD_YASM="true"
+        BUILD_SOFIA="false"
+        BUILD_LIBYUV="false"
+        BUILD_OPUS="false"
+        BUILD_VPX="true"
+        BUILD_X264="true"
+        BUILD_FFMPEG="true"
+      ;;
+      precise|quantal|raring)
+        BUILD_YASM="false"
+        BUILD_SOFIA="false"
+        PACKAGES_BUILD_SOFIA=" libsofia-sip-ua-dev"
+        PACKAGES_DEPENDS_SOFIA=", libsofia-sip-ua0"
+        BUILD_LIBYUV="false"
+        BUILD_OPUS="false"
+        BUILD_VPX="false"
+        PACKAGES_BUILD_VPX=" libvpx-dev"
+        PACKAGES_DEPENDS_VPX=", libvpx1"
+        BUILD_X264="false"
+        PACKAGES_BUILD_X264=" libx264-dev"
+        PACKAGES_DEPENDS_X264=", $(apt-cache search libx264 | grep -v development | cut -d" " -f 1)"
+        BUILD_FFMPEG="false"
+        PACKAGES_BUILD_FFMPEG=" libav-tools libavcodec-dev libavutil-dev libswscale-dev libsamplerate0-dev"
+        PACKAGES_DEPENDS_FFMPEG=", libav-tools, libsamplerate0"
+      ;;
+      saucy)
+        BUILD_YASM="false"
+        BUILD_SOFIA="false"
+        BUILD_LIBYUV="false"
+        BUILD_OPUS="false"
+        BUILD_VPX="false"
+        PACKAGES_BUILD_VPX=" libvpx-dev"
+        PACKAGES_DEPENDS_VPX=", libvpx1"
+        BUILD_X264="false"
+        PACKAGES_BUILD_X264=" libx264-dev"
+        PACKAGES_DEPENDS_X264=", $(apt-cache search libx264 | grep -v development | cut -d" " -f 1)"
+        BUILD_FFMPEG="false"
+        PACKAGES_BUILD_FFMPEG=" libav-tools libavcodec-dev libavutil-dev libswscale-dev libsamplerate0-dev"
+        PACKAGES_DEPENDS_FFMPEG=", libav-tools, libsamplerate0"
+      ;;
+      trusty)
+        BUILD_YASM="false"
+        BUILD_SOFIA="false"
+        GCC48FLAGS="CFLAGS=-fno-aggressive-loop-optimizations"
+        BUILD_LIBYUV="false"
+        BUILD_OPUS="false"
+        BUILD_VPX="false"
+        PACKAGES_BUILD_VPX=" libvpx-dev"
+        PACKAGES_DEPENDS_VPX=", libvpx1"
+        BUILD_X264="false"
+        PACKAGES_BUILD_X264=" libx264-dev"
+        PACKAGES_DEPENDS_X264=", $(apt-cache search libx264 | grep -v development | cut -d" " -f 1)"
+        BUILD_FFMPEG="false"
+        PACKAGES_BUILD_FFMPEG=" libav-tools libavcodec-dev libavutil-dev libswscale-dev libsamplerate0-dev"
+        PACKAGES_DEPENDS_FFMPEG=", libav-tools, libsamplerate0"
+      ;;
+      *)
+        echo "$LNG_MSG_DISTR_NOT_SUPPORT."
+        exit 1
+      ;;
+    esac
+  ;;
+  
+  Debian)
+    PACKAGE_ARCH="$(dpkg --print-architecture)"
+    PACKAGE_MANAGER="apt-get -V install"
+    PACKAGE_CHECK="dpkg-query --listfiles"
+    PACKAGES_DOWNLOAD="tar bzip2 wget git subversion"
+    
+    case "$LSB_CODENAME" in 
+      squeeze)
+        if $USE_ADDITIONAL_REPOSITORY ; then
+          PACKAGES_BUILD="build-essential git flex bison autoconf automake pkg-config md5deep libtool libssl-dev"
+          PACKAGES_DEPENDS="libstdc++6"
+          PACKAGES_BUILD_MISC=" libfreetype6-dev libavformat-dev"
+          PACKAGES_DEPENDS_MISC=", libfreetype6"
+          BUILD_YASM="false"
+          BUILD_SOFIA="false"
+          BUILD_LIBYUV="false"
+          BUILD_OPUS="false"
+          BUILD_VPX="false"
+          PACKAGES_BUILD_VPX=" libvpx-dev/squeeze-backports"
+          PACKAGES_DEPENDS_VPX=", libvpx1"
+          BUILD_X264="false"
+          PACKAGES_BUILD_X264=" libx264-dev/squeeze-backports"
+          PACKAGES_DEPENDS_X264=", $(apt-cache search libx264 | grep -v development | cut -d" " -f 1)"
+          BUILD_FFMPEG="false"
+          PACKAGES_BUILD_FFMPEG=" libav-tools/squeeze-backports libavcodec-dev/squeeze-backports libavutil-dev/squeeze-backports libswscale-dev/squeeze-backports libsamplerate0-dev"
+          PACKAGES_DEPENDS_FFMPEG=", libav-tools, libsamplerate0"
+        else
+          PACKAGES_BUILD="build-essential git flex bison autoconf automake pkg-config md5deep libtool  libssl-dev"
+          PACKAGES_DEPENDS="libstdc++6"
+          PACKAGES_BUILD_MISC=" libfreetype6-dev libavformat-dev"
+          PACKAGES_DEPENDS_MISC=", libfreetype6"
+          BUILD_YASM="true"
+          BUILD_SOFIA="false"
+          BUILD_LIBYUV="false"
+          BUILD_OPUS="false"
+          BUILD_VPX="true"
+          BUILD_X264="true"
+          BUILD_FFMPEG="true"
+        fi
+      ;;
+      wheezy)
+        PACKAGES_BUILD="build-essential git flex bison autoconf automake pkg-config md5deep libtool libssl-dev"
+        PACKAGES_DEPENDS="libstdc++6"
+        PACKAGES_BUILD_MISC=" libfreetype6-dev libavformat-dev"
+        PACKAGES_DEPENDS_MISC=", libfreetype6"
+        BUILD_YASM="false"
+        BUILD_SOFIA="false"
+        PACKAGES_BUILD_SOFIA=" libsofia-sip-ua-dev"
+        PACKAGES_DEPENDS_SOFIA=", libsofia-sip-ua0"
+        BUILD_LIBYUV="false"
+        BUILD_OPUS="false"
+        BUILD_VPX="false"
+        PACKAGES_BUILD_VPX=" libvpx-dev"
+        PACKAGES_DEPENDS_VPX=", libvpx1"
+        BUILD_X264="false"
+        PACKAGES_BUILD_X264=" libx264-dev"
+        PACKAGES_DEPENDS_X264=", $(apt-cache search libx264 | grep -v development | cut -d" " -f 1)"
+        BUILD_FFMPEG="false"
+        PACKAGES_BUILD_FFMPEG=" libav-tools libavcodec-dev libavutil-dev libswscale-dev libsamplerate0-dev"
+        PACKAGES_DEPENDS_FFMPEG=", libav-tools, libsamplerate0"
+      ;;
+      *)
+        echo "$LNG_MSG_DISTR_NOT_SUPPORT."
+        exit 1
+      ;;
+    esac
+  ;;
+  
+  CentOS)
+    PACKAGE_ARCH="$(rpm --eval %_arch)"
+    PACKAGE_MANAGER="yum install"
+    PACKAGE_CHECK="yum list installed"
+    PACKAGES_DOWNLOAD="tar bzip2 wget git subversion"
+
+    case "$(echo $LSB_CODENAME | cut -d"." -f 1)" in 
+      5)
+        LSB_CODENAME="el5"
+        PACKAGES_BUILD="kernel-devel gcc gcc-c++ make patch git flex bison autoconf automake pkgconfig rpm-build libtool  openssl-devel"
+        PACKAGES_DEPENDS="libstdc++"
+        PACKAGES_BUILD_MISC=" freetype-devel"
+        PACKAGES_DEPENDS_MISC=" freetype"
+        BUILD_YASM="true"
+        BUILD_SOFIA="false"
+        BUILD_LIBYUV="false"
+        BUILD_OPUS="false"
+        BUILD_VPX="true"
+        BUILD_X264="true"
+        BUILD_FFMPEG="true"
+	#BUILD_WITCH_VPX="false"
+      ;;
+      6)
+        LSB_CODENAME="el6"
+        if $USE_ADDITIONAL_REPOSITORY ; then
+          PACKAGES_BUILD="kernel-devel gcc gcc-c++ make patch git flex bison autoconf automake pkgconfig rpm-build libtool openssl-devel"
+          PACKAGES_DEPENDS="libstdc++"
+          PACKAGES_BUILD_MISC=" freetype-devel"
+          PACKAGES_DEPENDS_MISC=" freetype"
+          BUILD_YASM="false"
+          PACKAGES_BUILD_YASM=" yasm"
+          BUILD_SOFIA="false"
+          BUILD_LIBYUV="false"
+          BUILD_OPUS="false"
+          BUILD_VPX="true"
+          BUILD_X264="false"
+          PACKAGES_BUILD_X264=" x264-devel"
+          PACKAGES_DEPENDS_X264=" x264-libs"
+          BUILD_FFMPEG="false"
+          PACKAGES_BUILD_FFMPEG=" ffmpeg ffmpeg-devel"
+          PACKAGES_DEPENDS_FFMPEG=" ffmpeg"
+        else
+          PACKAGES_BUILD="kernel-devel gcc gcc-c++ make patch git flex bison autoconf automake pkgconfig rpm-build libtool openssl-devel"
+          PACKAGES_DEPENDS="libstdc++"
+          PACKAGES_BUILD_MISC=" freetype-devel"
+          PACKAGES_DEPENDS_MISC=" freetype"
+          BUILD_YASM="true"
+          BUILD_SOFIA="false"
+          BUILD_LIBYUV="false"
+          BUILD_OPUS="false"
+          BUILD_VPX="true"
+          BUILD_X264="true"
+          BUILD_FFMPEG="true"
+        fi
+      ;;
+      7)
+        LSB_CODENAME="el7"
+        if $USE_ADDITIONAL_REPOSITORY ; then
+          PACKAGES_BUILD="kernel-devel gcc gcc-c++ make patch git flex bison autoconf automake pkgconfig rpm-build libtool openssl-devel"
+          PACKAGES_DEPENDS="libstdc++"
+          PACKAGES_BUILD_MISC=" freetype-devel"
+          PACKAGES_DEPENDS_MISC=" freetype"
+          BUILD_YASM="false"
+          PACKAGES_BUILD_YASM=" yasm"
+          BUILD_SOFIA="false"
+          BUILD_LIBYUV="false"
+          BUILD_OPUS="false"
+          BUILD_VPX="true"
+          BUILD_X264="false"
+          PACKAGES_BUILD_X264=" x264-devel"
+          PACKAGES_DEPENDS_X264=" x264-libs"
+          BUILD_FFMPEG="false"
+          PACKAGES_BUILD_FFMPEG=" ffmpeg ffmpeg-devel"
+          PACKAGES_DEPENDS_FFMPEG=" ffmpeg"
+        else
+          PACKAGES_BUILD="kernel-devel gcc gcc-c++ make patch git flex bison autoconf automake pkgconfig rpm-build libtool openssl-devel"
+          PACKAGES_DEPENDS="libstdc++"
+          PACKAGES_BUILD_MISC=" freetype-devel"
+          PACKAGES_DEPENDS_MISC=" freetype"
+          BUILD_YASM="true"
+          BUILD_SOFIA="false"
+          BUILD_LIBYUV="false"
+          BUILD_OPUS="false"
+          BUILD_VPX="true"
+          BUILD_X264="true"
+          BUILD_FFMPEG="true"
+        fi
+      ;;
+      *)
+        echo "$LNG_MSG_DISTR_NOT_SUPPORT."
+        exit 1
+      ;;
+    esac
+  ;;
+
+  Fedora)
+    LSB_CODENAME="$(rpm --eval %dist | sed 's/.//')"
+    PACKAGE_ARCH="$(rpm --eval %_arch)"
+    PACKAGE_MANAGER="yum install"
+    PACKAGE_CHECK="yum list installed"
+    PACKAGES_DOWNLOAD="tar bzip2 wget git subversion"
+
+    case "$LSB_CODENAME" in 
+      fc18)
+        if $USE_ADDITIONAL_REPOSITORY ; then
+          PACKAGES_BUILD="kernel-devel gcc gcc-c++ make patch perl-Digest-MD5 git flex bison autoconf automake pkgconfig rpm-build libtool openssl-devel"
+          PACKAGES_DEPENDS="libstdc++"
+          PACKAGES_BUILD_MISC=" freetype-devel"
+          PACKAGES_DEPENDS_MISC=" freetype"
+          BUILD_YASM="false"
+          BUILD_SOFIA="false"
+          PACKAGES_BUILD_SOFIA=" sofia-sip-devel"
+          PACKAGES_DEPENDS_SOFIA=" sofia-sip"
+          BUILD_LIBYUV="false"
+          PACKAGES_BUILD_LIBYUV=" libyuv-devel"
+          PACKAGES_DEPENDS_LIBYUV=" libyuv"
+          BUILD_OPUS="false"
+          BUILD_VPX="false"
+          PACKAGES_BUILD_VPX=" libvpx-devel"
+          PACKAGES_DEPENDS_VPX=" libvpx"
+          BUILD_X264="false"
+          PACKAGES_BUILD_X264=" x264-devel"
+          PACKAGES_DEPENDS_X264=" x264-libs"
+          BUILD_FFMPEG="false"
+          PACKAGES_BUILD_FFMPEG=" ffmpeg ffmpeg-devel"
+          PACKAGES_DEPENDS_FFMPEG=" ffmpeg"
+        else
+          PACKAGES_BUILD="kernel-devel gcc gcc-c++ make patch perl-Digest-MD5 git flex bison autoconf automake pkgconfig rpm-build libtool openssl-devel"
+          PACKAGES_DEPENDS="libstdc++"
+          PACKAGES_BUILD_MISC=" freetype-devel"
+          PACKAGES_DEPENDS_MISC=" freetype"
+          BUILD_YASM="false"
+          PACKAGES_BUILD_YASM=" yasm"
+          BUILD_SOFIA="false"
+          PACKAGES_BUILD_SOFIA=" sofia-sip-devel"
+          PACKAGES_DEPENDS_SOFIA=" sofia-sip"
+          BUILD_LIBYUV="false"
+          PACKAGES_BUILD_LIBYUV=" libyuv-devel"
+          PACKAGES_DEPENDS_LIBYUV=" libyuv"
+          BUILD_OPUS="false"
+          BUILD_VPX="false"
+          PACKAGES_BUILD_VPX=" libvpx-devel"
+          PACKAGES_DEPENDS_VPX=" libvpx"
+          BUILD_X264="true"
+          BUILD_FFMPEG="true"
+        fi
+      ;;
+      fc19|fc20)
+        if $USE_ADDITIONAL_REPOSITORY ; then
+          PACKAGES_BUILD="kernel-devel gcc gcc-c++ make patch perl-Digest-MD5 git flex bison autoconf automake pkgconfig rpm-build libtool openssl-devel"
+          PACKAGES_DEPENDS="libstdc++"
+          PACKAGES_BUILD_MISC=" freetype-devel"
+          PACKAGES_DEPENDS_MISC=" freetype"
+          BUILD_YASM="false"
+          BUILD_SOFIA="false"
+          GCC48FLAGS="CFLAGS=-fno-aggressive-loop-optimizations"
+          BUILD_LIBYUV="false"
+          PACKAGES_BUILD_LIBYUV=" libyuv-devel"
+          PACKAGES_DEPENDS_LIBYUV=" libyuv"
+          BUILD_OPUS="false"
+          BUILD_VPX="false"
+          PACKAGES_BUILD_VPX=" libvpx-devel"
+          PACKAGES_DEPENDS_VPX=" libvpx"
+          BUILD_X264="false"
+          PACKAGES_BUILD_X264=" x264-devel"
+          PACKAGES_DEPENDS_X264=" x264-libs"
+          BUILD_FFMPEG="false"
+          PACKAGES_BUILD_FFMPEG=" ffmpeg ffmpeg-devel"
+          PACKAGES_DEPENDS_FFMPEG=" ffmpeg"
+        else
+          PACKAGES_BUILD="kernel-devel gcc gcc-c++ make patch perl-Digest-MD5 git flex bison autoconf automake pkgconfig rpm-build libtool openssl-devel"
+          PACKAGES_DEPENDS="libstdc++"
+          PACKAGES_BUILD_MISC=" freetype-devel"
+          PACKAGES_DEPENDS_MISC=" freetype"
+          BUILD_YASM="false"
+          PACKAGES_BUILD_YASM=" yasm"
+          BUILD_SOFIA="false"
+          GCC48FLAGS="CFLAGS=-fno-aggressive-loop-optimizations"
+          BUILD_LIBYUV="false"
+          PACKAGES_BUILD_LIBYUV=" libyuv-devel"
+          PACKAGES_DEPENDS_LIBYUV=" libyuv"
+          BUILD_OPUS="false"
+          BUILD_VPX="false"
+          PACKAGES_BUILD_VPX=" libvpx-devel"
+          PACKAGES_DEPENDS_VPX=" libvpx"
+          BUILD_X264="true"
+          BUILD_FFMPEG="true"
+        fi
+      ;;
+      *)
+        echo "$LNG_MSG_DISTR_NOT_SUPPORT."
+        exit 1
+      ;;
+    esac
+  ;;
+  
+  openSUSE)
+    PACKAGE_ARCH="$(rpm --eval %_arch)"
+    PACKAGE_MANAGER="zypper install"
+    PACKAGE_CHECK="rpm -q"
+    PACKAGES_DOWNLOAD="tar bzip2 wget git subversion"
+    
+    case "$LSB_CODENAME" in 
+      Dartmouth)
+        PACKAGES_BUILD="kernel-devel gcc gcc-c++ make patch git flex bison autoconf automake pkg-config rpm-build libtool openssl-devel"
+        PACKAGES_DEPENDS="libstdc++6"
+        PACKAGES_BUILD_MISC=" freetype2-devel"
+        PACKAGES_DEPENDS_MISC=" freetype"
+        BUILD_YASM="false"
+        PACKAGES_BUILD_YASM=" yasm"
+        BUILD_SOFIA="false"
+        PACKAGES_BUILD_SOFIA=" sofia-sip-devel"
+        PACKAGES_DEPENDS_SOFIA=" sofia-sip"
+        BUILD_LIBYUV="false"
+        BUILD_OPUS="false"
+        BUILD_VPX="false"
+        PACKAGES_BUILD_VPX=" libvpx-devel"
+        PACKAGES_DEPENDS_VPX=" libvpx1"
+        BUILD_X264="true"
+        BUILD_FFMPEG="true"
+      ;;
+      Bottle)
+        PACKAGES_BUILD="kernel-devel gcc gcc-c++ make patch git flex bison autoconf automake pkg-config rpm-build libtool openssl-devel"
+        PACKAGES_DEPENDS="libstdc++6"
+        PACKAGES_BUILD_MISC=" freetype2-devel"
+        PACKAGES_DEPENDS_MISC=" freetype"
+        BUILD_YASM="false"
+        PACKAGES_BUILD_YASM=" yasm"
+        BUILD_SOFIA="false"
+        GCC48FLAGS="CFLAGS=-fno-aggressive-loop-optimizations"
+        BUILD_LIBYUV="false"
+        BUILD_OPUS="false"
+        BUILD_VPX="false"
+        PACKAGES_BUILD_VPX=" libvpx-devel"
+        PACKAGES_DEPENDS_VPX=" libvpx1"
+        BUILD_X264="true"
+        BUILD_FFMPEG="true"
+      ;;
+      *)
+        echo "$LNG_MSG_DISTR_NOT_SUPPORT."
+        exit 1
+      ;;
+    esac
+  ;;
+  
+  Arch)
+    PACKAGE_ARCH="$(uname -m)"
+    PACKAGE_MANAGER="pacman -S"
+    PACKAGE_CHECK="pacman -Q"
+    PACKAGES_DOWNLOAD="tar bzip2 wget git subversion"
+    
+    PACKAGES_BUILD_META="linux-headers"
+    PACKAGES_BUILD="gcc make patch git flex bison autoconf automake pkg-config libtool openssl"
+    PACKAGES_DEPENDS=""
+    PACKAGES_BUILD_MISC=" freetype2"
+    PACKAGES_DEPENDS_MISC=""
+    BUILD_YASM="false"
+    BUILD_SOFIA="false"
+    PACKAGES_BUILD_SOFIA=" sofia-sip"
+    PACKAGES_DEPENDS_SOFIA=""
+    BUILD_LIBYUV="false"
+    BUILD_OPUS="false"
+    BUILD_VPX="false"
+    PACKAGES_BUILD_VPX=" libvpx"
+    PACKAGES_DEPENDS_VPX=""
+    BUILD_X264="false"
+    PACKAGES_BUILD_X264=" x264"
+    PACKAGES_DEPENDS_X264=""
+    BUILD_FFMPEG="false"
+    PACKAGES_BUILD_FFMPEG=" ffmpeg"
+    PACKAGES_DEPENDS_FFMPEG=""
+  ;;
+
+  *)
+    echo "$LNG_MSG_DISTR_NOT_SUPPORT."
+    exit 1
+  ;;
+
+esac
+
+# Принудительное переопределение пакетов пользователем
+if [ ! -z "$OVERRIDE_BUILD_YASM" ] ; then
+  BUILD_YASM="$OVERRIDE_BUILD_YASM"
+  PACKAGES_BUILD_YASM="$OVERRIDE_PACKAGES_BUILD_YASM"
+fi
+if [ ! -z "$OVERRIDE_BUILD_SOFIA" ] ; then
+  BUILD_SOFIA="$OVERRIDE_BUILD_SOFIA"
+  PACKAGES_BUILD_SOFIA="$OVERRIDE_PACKAGES_BUILD_SOFIA"
+  PACKAGES_DEPENDS_SOFIA="$OVERRIDE_PACKAGES_DEPENDS_SOFIA"
+fi
+if [ ! -z "$OVERRIDE_BUILD_LIBYUV" ] ; then
+  BUILD_LIBYUV="$OVERRIDE_BUILD_LIBYUV"
+  PACKAGES_BUILD_LIBYUV="$OVERRIDE_PACKAGES_BUILD_LIBYUV"
+  PACKAGES_DEPENDS_LIBYUV="$OVERRIDE_PACKAGES_DEPENDS_LIBYUV"
+fi
+if [ ! -z "$OVERRIDE_BUILD_OPUS" ] ; then
+  BUILD_OPUS="$OVERRIDE_BUILD_OPUS"
+  PACKAGES_BUILD_OPUS="$OVERRIDE_PACKAGES_BUILD_OPUS"
+  PACKAGES_DEPENDS_OPUS="$OVERRIDE_PACKAGES_DEPENDS_OPUS"
+fi
+if [ ! -z "$OVERRIDE_BUILD_VPX" ] ; then
+  BUILD_VPX="$OVERRIDE_BUILD_VPX"
+  PACKAGES_BUILD_VPX="$OVERRIDE_PACKAGES_BUILD_VPX"
+  PACKAGES_DEPENDS_VPX="$OVERRIDE_PACKAGES_DEPENDS_VPX"
+fi
+if [ ! -z "$OVERRIDE_BUILD_X264" ] ; then
+  BUILD_X264="$OVERRIDE_BUILD_X264"
+  PACKAGES_BUILD_X264="$OVERRIDE_PACKAGES_BUILD_X264"
+  PACKAGES_DEPENDS_X264="$OVERRIDE_PACKAGES_DEPENDS_X264"
+fi
+if [ ! -z "$OVERRIDE_BUILD_FFMPEG" ] ; then
+  BUILD_FFMPEG="$OVERRIDE_BUILD_FFMPEG"
+  PACKAGES_BUILD_FFMPEG="$OVERRIDE_PACKAGES_BUILD_FFMPEG"
+  PACKAGES_DEPENDS_FFMPEG="$OVERRIDE_PACKAGES_DEPENDS_FFMPEG"
+fi
+
+# Итоговые списки пакетов
+PACKAGES_BUILD="$PACKAGES_BUILD $PACKAGES_BUILD_MISC $PACKAGES_BUILD_YASM $PACKAGES_BUILD_SOFIA $PACKAGES_BUILD_LIBYUV $PACKAGES_BUILD_OPUS $PACKAGES_BUILD_VPX $PACKAGES_BUILD_X264 $PACKAGES_BUILD_FFMPEG"
+PACKAGES_DEPENDS="$PACKAGES_DEPENDS $PACKAGES_DEPENDS_MISC $PACKAGES_DEPENDS_SOFIA $PACKAGES_DEPENDS_LIBYUV $PACKAGES_DEPENDS_OPUS $PACKAGES_DEPENDS_VPX $PACKAGES_DEPENDS_X264 $PACKAGES_DEPENDS_FFMPEG"
+
+case $PACKAGE_ARCH in
+
+  amd64)
+    DISTR_ARCH="x86_64"
+  ;;
+  
+  x86_64)
+    DISTR_ARCH="x86_64"
+  ;;
+  
+  *)
+    DISTR_ARCH="x86"
+  ;;
+  
+esac
+
+echo
+echo "$LNG_MSG_DIST_DETERM: $LSB_DISTR '$LSB_CODENAME' $PACKAGE_ARCH"
+echo "$LNG_SOURCE_FOLDER: $DIR_SRC"
+echo "$LNG_BUILD_FOLDER: $DIR_BUILD"
+echo "$LNG_INSTALL_FOLDER OpenMCU-ru: $DIR_PREFIX"
+echo "branch:" ${OPENMCURU_BRANCH}
+echo "configure options:" ${MCU_CONF_OPTS}
+echo
+
+sleep 1s
+
+# обработка заданной команды
+DT_START=$(date +%s)
+
+case "$1" in
+
+  install)
+    do_download
+    do_build
+    do_package
+  ;;
+
+  download)
+    do_download
+  ;;
+
+  build)
+    do_build
+  ;;
+
+  package)
+    do_package
+  ;;
+
+  uninstall)
+    do_uninstall
+  ;;
+  
+  *)
+    do_showhelp
+    exit 2
+  ;;
+  
+esac
+
+DT_END=$(date +%s)
+DT_TOTAL=$(expr $DT_END - $DT_START)
+echo ""
+echo "$LNG_TOTAL_TIME: $DT_TOTAL s"

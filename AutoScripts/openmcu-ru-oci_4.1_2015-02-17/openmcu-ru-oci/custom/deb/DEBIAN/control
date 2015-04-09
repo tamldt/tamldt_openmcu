@@ -1,0 +1,24 @@
+Package: openmcu-ru
+Version:
+Architecture:
+Maintainer:
+Installed-Size:
+Depends:
+Priority: optional
+Homepage: http://openmcu.ru/
+Description: H.323/SIP Multipoint Control Unit for video conferences.
+ OpenMCU-ru has the following features:
+  * configuration and control via the web interface on port 1420
+    (use for connecting: http://host:1420)
+  * supported interface languages: English, Russian
+  * does not require codec hardware to operate
+  * outgoing video is cached to reduce the load on the server
+  * supported protocols: H.323, SIP
+  * supported video codecs: H.261, H.263, H.263+, H.264, VP8
+  * supported audio codecs: G.711, G.722, G723.1, G.726, G.729, iLBC, Speex, SILK, OPUS
+  * several different conferences can be taking place at the same time
+    using different 'rooms'
+  * display statistics on calls in real time
+  * initiate calls from the MCU to remote endpoints
+  * conference recording
+  * conference translation as web stream

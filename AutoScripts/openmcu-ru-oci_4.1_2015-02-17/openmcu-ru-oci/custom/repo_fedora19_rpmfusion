@@ -1,0 +1,20 @@
+#!/bin/bash
+
+GPG_TEMP_HOME="./gpg-temp"
+REPO_KEY=172FF33D
+
+mkdir $GPG_TEMP_HOME
+chmod 700 $GPG_TEMP_HOME
+gpg2 --homedir $GPG_TEMP_HOME --keyserver pgp.mit.edu --recv-keys $REPO_KEY
+gpg2 --homedir $GPG_TEMP_HOME --armor --export $REPO_KEY > $GPG_TEMP_HOME/$REPO_KEY.asc
+rpm --import $GPG_TEMP_HOME/$REPO_KEY.asc
+rm -rf $GPG_TEMP_HOME
+
+DST_FILENAME="rpmfusion-free-release-19.noarch.rpm"
+wget http://download1.rpmfusion.org/free/fedora/$DST_FILENAME
+if rpm --checksig $DST_FILENAME ; then
+  rpm -i $DST_FILENAME
+else
+  echo "error on checksig"
+fi
+rm $DST_FILENAME
