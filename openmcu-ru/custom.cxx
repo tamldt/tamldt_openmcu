@@ -7,13 +7,13 @@
 //
 ////////////////////////////////////////////////////
 
-#define	PRODUCT_NAME_TEXT	"OpenMCU-ru"
-#define	EXE_NAME_TEXT	        "openmcu-ru"
-#define	MANUFACTURER_TEXT	"OpenMCU-ru Team"
+#define	PRODUCT_NAME_TEXT	"HONEYNETMCU"
+#define	EXE_NAME_TEXT	        "HONEYNET"
+#define	MANUFACTURER_TEXT	"HONEYNET Team"
 #define	COPYRIGHT_HOLDER	MANUFACTURER_TEXT
 
 #define	EMAIL                   ""
-#define	HOME_PAGE               "http://www.openmcu.ru"
+#define	HOME_PAGE               "http://honeynet.vn"
 #define	PRODUCT_NAME_HTML       PRODUCT_NAME_TEXT
 
 #ifndef GIF_NAME
