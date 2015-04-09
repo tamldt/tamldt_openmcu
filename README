@@ -1,8 +1,8 @@
 ----------------------------------
-Video conference server OpenMCU-ru
+Video conference server HONEYNET-MCU
 ----------------------------------
 
-Homepage: http://www.openmcu.ru/
+Homepage: http://honeynet.vn/
 
 Authors are listed in the file "AUTHORS".
 
@@ -17,15 +17,15 @@ Changelog can be found in the file "NEWS".
 1. Introduction
 ---------------
 
-OpenMCU-ru is an open-source Mutli Conference Unit using the H.323, SIP and RTSP
-protocols (software MCU). It is fork of the original OpenMCU with many new features.
+HONEYNET-MCU is an open-source Mutli Conference Unit using the H.323, SIP and RTSP
+protocols (software MCU). It is fork of the original HONEYNET-MCU with many new features.
 Server runs on Linux, Windows and FreeBSD.
 
 -----------
 2. Features
 -----------
 
-OpenMCU-ru has the following features:
+HONEYNET-MCU has the following features:
   * configuration and control via the web interface on port 1420
     (use for connecting: http://host:1420)
   * supported interface languages: English, French, Japanese, Portuguese, Russian, Ukrainian
@@ -50,7 +50,7 @@ OpenMCU-ru has the following features:
 3. Operation
 ------------
 
-OpenMCU-ru listens on H.323 and SIP ports for incoming connections.
+HONEYNET-MCU listens on H.323 and SIP ports for incoming connections.
 
 On incoming connection server creates room, specified by remote
 terminal and connects client to this room. If client did not specify
