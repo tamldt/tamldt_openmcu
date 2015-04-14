@@ -7,7 +7,7 @@
 //
 ////////////////////////////////////////////////////
 
-#define	PRODUCT_NAME_TEXT	"HONEYNETMCU"
+#define	PRODUCT_NAME_TEXT	"HONEYNETMCU_TAM-HoneyNet"
 #define	EXE_NAME_TEXT	        "HONEYNET_EXC_NAME_TEXT"
 #define	MANUFACTURER_TEXT	"HONEYNET Team"
 #define	COPYRIGHT_HOLDER	MANUFACTURER_TEXT
